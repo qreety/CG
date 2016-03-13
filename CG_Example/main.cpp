@@ -56,8 +56,6 @@ GLushort	*pindex_triangle;
 std::vector<TVertex_VC>	pvertex_triangle;
 GLuint VAOID, IBOID, VBOID;
 GLuint Shader, VertShader, FragShader;
-int ProjectionModelviewMatrix_Loc;
-
 enum Model { CUBE, COW, PHONE };
 Model model = PHONE;
 enum Orientation { CCW, CW} ;
@@ -438,6 +436,53 @@ int LoadShader(const char *pfilePath_vs, const char *pfilePath_fs, bool bindTexC
 	return 1;		//Success
 }
 
+void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat4 ViewMatrix, glm::mat4	MVPMatrix, light sLight, light dLight){
+	//MVP
+	glUniformMatrix4fv(glGetUniformLocation(Shader, "MVP"), 1, FALSE, &MVPMatrix[0][0]);
+	glUniformMatrix4fv(glGetUniformLocation(Shader, "M"), 1, FALSE, &ModelMatrix[0][0]);
+
+	//Materials
+	if (model == CUBE || model == COW){
+		glUniform3f(glGetUniformLocation(programID, "mat[0].ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[0].diffuse"), Mate[0].diffuse.r, Mate[0].diffuse.g, Mate[0].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[0].specular"), Mate[0].specular.r, Mate[0].specular.g, Mate[0].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[0].shine"), Mate[0].shine);
+	}
+
+	if (model == PHONE){
+		//1st
+		glUniform3f(glGetUniformLocation(programID, "mat[0].ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[0].diffuse"), Mate[0].diffuse.r, Mate[0].diffuse.g, Mate[0].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[0].specular"), Mate[0].specular.r, Mate[0].specular.g, Mate[0].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[0].shine"), Mate[0].shine);
+		//2nd
+		glUniform3f(glGetUniformLocation(programID, "mat[1].ambient"), Mate[1].ambient.r, Mate[1].ambient.g, Mate[1].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[1].diffuse"), Mate[1].diffuse.r, Mate[1].diffuse.g, Mate[1].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[1].specular"), Mate[1].specular.r, Mate[1].specular.g, Mate[1].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[1].shine"), Mate[1].shine);
+		//3rd
+		glUniform3f(glGetUniformLocation(programID, "mat[2].ambient"), Mate[2].ambient.r, Mate[2].ambient.g, Mate[2].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[2].diffuse"), Mate[2].diffuse.r, Mate[2].diffuse.g, Mate[2].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[2].specular"), Mate[2].specular.r, Mate[2].specular.g, Mate[2].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[2].shine"), Mate[2].shine);
+		//4th
+		glUniform3f(glGetUniformLocation(programID, "mat[3].ambient"), Mate[3].ambient.r, Mate[3].ambient.g, Mate[3].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[3].diffuse"), Mate[3].diffuse.r, Mate[3].diffuse.g, Mate[3].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[3].specular"), Mate[3].specular.r, Mate[3].specular.g, Mate[3].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[3].shine"), Mate[3].shine);
+		//5th
+		glUniform3f(glGetUniformLocation(programID, "mat[4].ambient"), Mate[4].ambient.r, Mate[4].ambient.g, Mate[4].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[4].diffuse"), Mate[4].diffuse.r, Mate[4].diffuse.g, Mate[4].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[4].specular"), Mate[4].specular.r, Mate[4].specular.g, Mate[4].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[4].shine"), Mate[4].shine);
+		//6th
+		glUniform3f(glGetUniformLocation(programID, "mat[5].ambient"), Mate[5].ambient.r, Mate[5].ambient.g, Mate[5].ambient.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[5].diffuse"), Mate[5].diffuse.r, Mate[5].diffuse.g, Mate[5].diffuse.b);
+		glUniform3f(glGetUniformLocation(programID, "mat[5].specular"), Mate[5].specular.r, Mate[5].specular.g, Mate[5].specular.b);
+		glUniform1f(glGetUniformLocation(programID, "mat[5].shine"), Mate[5].shine);
+	}
+}
+
 void CreateGeometry(){
 
 	for (int i = 0; i < NumV; i++){
@@ -502,6 +547,7 @@ void CreateGeometry(){
 void display()
 {
 	glm::mat4 V;
+	//glm::vec3 camPos;
 	
 	switch (model)
 	{
@@ -528,7 +574,7 @@ void display()
 	CreateGeometry();
 
 	glm::mat4 P = glm::perspective(45.0f, 4.0f / 3.0f, 1.0f, 1000.0f);
-	glm::mat4 projectionModelviewMatrix = P * V;
+	glm::mat4 MVP = P * V;
 
 	//Clear all the buffers
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -536,7 +582,7 @@ void display()
 	//Bind the shader that we want to use
 	glUseProgram(Shader);
 	//Setup all uniforms for your shader
-	glUniformMatrix4fv(ProjectionModelviewMatrix_Loc, 1, FALSE, &projectionModelviewMatrix[0][0]);
+	SetUniform(Shader, glm::vec3(1.0f), glm::mat4(1.0f), V, MVP, sLight, dLight);
 	//Bind the VAO
 	glBindVertexArray(VAOID);
 	//At this point, we would bind textures but we aren't using textures in this example
@@ -616,15 +662,9 @@ int main(int argc, char* argv[])
 	InitGLStates();
 	InitializeUI();
 
-	if (LoadShader("Shader1.vert", "Shader1.frag", false, false, true, Shader, VertShader, FragShader) == -1)
-	{
-		exit(1);
-	}
-	else
-	{
-		ProjectionModelviewMatrix_Loc = glGetUniformLocation(Shader, "ProjectionModelviewMatrix");
-	}
-
+	LoadShader("Shader1.vert", "Shader1.frag", false, false, true, Shader, VertShader, FragShader);
+	
+	
 	glutDisplayFunc(display);
 	glutIdleFunc(display);
 	glutReshapeFunc(reshape);
