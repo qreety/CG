@@ -8,6 +8,7 @@
 #include <glm.hpp>
 #include "gtc/matrix_transform.hpp"
 #include "vec3.hpp"
+#include <AntTweakBar.h>
 
 using namespace std;
 
@@ -32,12 +33,24 @@ struct material{
 	float	shine;
 };
 
+struct light{
+	glm::vec3 ambient;
+	glm::vec3 diffuse;
+	glm::vec3 specular;
+	glm::vec4 position;
+	GLboolean on;
+};
+
 GLuint NumTris, material_count, NumV;
 GLfloat x_min = FLT_MIN, x_max = FLT_MIN,
 y_min = FLT_MIN, y_max = FLT_MIN,
 z_min = FLT_MIN, z_max = FLT_MIN; //To calculate the model position
+GLfloat global_r, global_g, global_b;
+bool dLightr;
 triangle *Tris;
 material *Mate;
+light sLight, dLight;
+TwBar *bar;
 
 GLushort	*pindex_triangle;
 std::vector<TVertex_VC>	pvertex_triangle;
@@ -47,7 +60,14 @@ int ProjectionModelviewMatrix_Loc;
 
 enum Model { CUBE, COW, PHONE };
 Model model = PHONE;
+enum Orientation { CCW, CW} ;
+Orientation ori = CCW;
+enum Shading {FLAT, SMOOTH};
+Shading sm = SMOOTH;
+enum Rotation{X, Y, Z};
+Rotation r = X;
 
+void TW_CALL Reset(void *clientDate);
 // loadFile - loads text file into char* fname
 // allocates memory - so need to delete after use
 // size of file returned in fSize
@@ -89,7 +109,6 @@ void printShaderInfoLog(GLint shader)
 	}
 }
 
-
 void InitGLStates()
 {
 	glShadeModel(GL_SMOOTH);
@@ -103,7 +122,6 @@ void InitGLStates()
 	glStencilMask(0xFFFFFFFF);
 	glStencilFunc(GL_EQUAL, 0x00000000, 0x00000001);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-	glFrontFace(GL_CCW);
 	glCullFace(GL_BACK);
 	glEnable(GL_CULL_FACE);
 	glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -112,7 +130,112 @@ void InitGLStates()
 	glDisable(GL_BLEND);
 	glDisable(GL_ALPHA_TEST);
 	glDisable(GL_DITHER);
-	glActiveTexture(GL_TEXTURE0);
+	TwInit(TW_OPENGL_CORE, NULL);
+
+	glutMouseFunc((GLUTmousebuttonfun)TwEventMouseButtonGLUT);
+	glutMotionFunc((GLUTmousemotionfun)TwEventMouseMotionGLUT);
+	glutPassiveMotionFunc((GLUTmousemotionfun)TwEventMouseMotionGLUT);
+	glutKeyboardFunc((GLUTkeyboardfun)TwEventKeyboardGLUT);
+	glutSpecialFunc((GLUTspecialfun)TwEventSpecialGLUT);
+	TwGLUTModifiersFunc(glutGetModifiers);
+}
+
+void InitializeUI(){
+	bar = TwNewBar("TweakBar");
+	TwDefine(" TweakBar size='200 400' color='96 216 224' "); // change default tweak bar size and color
+
+	{
+		TwEnumVal modelEV[3] = { { CUBE, "Cube" }, { COW, "Cow" }, { PHONE, "Phone" } };
+		TwType modelType = TwDefineEnum("modelType", modelEV, 3);
+		TwAddVarRW(bar, "Model", modelType, &model, " keyIncr = '<' keyDecr = '>'");
+	}
+
+	{
+		TwEnumVal oriEV[2] = { { CW, "CW" }, { CCW, "CCW" } };
+		TwType oriType = TwDefineEnum("oriType", oriEV, 2);
+		TwAddVarRW(bar, "Orientation", oriType, &ori, " keyIncr = '<' keyDecr = '>'");
+	}
+
+	{
+		TwEnumVal smEV[2] = { { FLAT, "FLAT" }, { SMOOTH, "SMOOTH" } };
+		TwType smType = TwDefineEnum("smType", smEV, 2);
+		TwAddVarRW(bar, "Shade Mode", smType, &sm, " keyIncr = '<' keyDecr = '>'");
+	}
+
+	{
+		TwAddVarRW(bar, "gRed", TW_TYPE_FLOAT, &global_r, "group = Global_Light"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "gGreen", TW_TYPE_FLOAT, &global_g, "group = Global_Light"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "gBlue", TW_TYPE_FLOAT, &global_b, "group = Global_Light"
+			" min=0 max=1.0 step=0.1");
+	}
+
+	{
+		TwAddVarRW(bar, "sSwitch", TW_TYPE_BOOL32, &sLight.on, "group = Static_Light");
+
+		TwAddVarRW(bar, "saRed", TW_TYPE_FLOAT, &sLight.ambient.r, "group = sAmbient"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "saGreen", TW_TYPE_FLOAT, &sLight.ambient.g, "group = sAmbient"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "saBlue", TW_TYPE_FLOAT, &sLight.ambient.b, "group = sAmbient"
+			" min=0 max=1.0 step=0.1");
+
+		TwAddVarRW(bar, "sdRed", TW_TYPE_FLOAT, &sLight.diffuse.r, "group = sDiffuse"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "sdGreen", TW_TYPE_FLOAT, &sLight.diffuse.g, "group = sDiffuse"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "sdBlue", TW_TYPE_FLOAT, &sLight.diffuse.b, "group = sDiffuse"
+			" min=0 max=1.0 step=0.1");
+
+		TwAddVarRW(bar, "ssRed", TW_TYPE_FLOAT, &sLight.specular.r, "group = sSpecular"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "ssGreen", TW_TYPE_FLOAT, &sLight.specular.g, "group = sSpecular"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "ssBlue", TW_TYPE_FLOAT, &sLight.specular.b, "group = sSpecular"
+			" min=0 max=1.0 step=0.1");
+
+		TwDefine("TweakBar/sAmbient group = Static_Light");
+		TwDefine("TweakBar/sDiffuse group = Static_Light");
+		TwDefine("TweakBar/sSpecular group = Static_Light");
+	}
+
+	{
+		TwAddVarRW(bar, "dSwitch", TW_TYPE_BOOL32, &dLight.on, "group = Dynamic_Light");
+
+		TwAddVarRW(bar, "daRed", TW_TYPE_FLOAT, &dLight.ambient.r, "group = dAmbient"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "daGreen", TW_TYPE_FLOAT, &dLight.ambient.g, "group = dAmbient"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "daBlue", TW_TYPE_FLOAT, &dLight.ambient.b, "group = dAmbient"
+			" min=0 max=1.0 step=0.1");
+
+		TwAddVarRW(bar, "ddRed", TW_TYPE_FLOAT, &dLight.diffuse.r, "group = dDiffuse"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "ddGreen", TW_TYPE_FLOAT, &dLight.diffuse.g, "group = dDiffuse"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "ddBlue", TW_TYPE_FLOAT, &dLight.diffuse.b, "group = dDiffuse"
+			" min=0 max=1.0 step=0.1");
+
+		TwAddVarRW(bar, "dsRed", TW_TYPE_FLOAT, &dLight.specular.r, "group = dSpecular"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "dsGreen", TW_TYPE_FLOAT, &dLight.specular.g, "group = dSpecular"
+			" min=0 max=1.0 step=0.1");
+		TwAddVarRW(bar, "dsBlue", TW_TYPE_FLOAT, &dLight.specular.b, "group = dSpecular"
+			" min=0 max=1.0 step=0.1");
+
+		TwAddVarRW(bar, "Rotation", TW_TYPE_BOOL8, &dLightr, "group = Dynamic_Light");
+		{
+			TwEnumVal rotEV[3] = { { X, "X-Axis" }, { Y, "Y-Axis" }, { Z, "Z-Axis" } };
+			TwType rotDir = TwDefineEnum("rotDir", rotEV, 3);
+			TwAddVarRW(bar, "Direction", rotDir, &r, " group = Dynamic_Light");
+		}
+		TwAddButton(bar, "Reset", Reset, NULL, " group = Dynamic_Light");
+
+		TwDefine("TweakBar/dAmbient group = Dynamic_Light");
+		TwDefine("TweakBar/dDiffuse group = Dynamic_Light");
+		TwDefine("TweakBar/dSpecular group = Dynamic_Light");
+	}
 }
 
 //Return the minimum value of three values
@@ -424,12 +547,18 @@ void display()
 	//The last parameter is the start address in the IBO => zero
 	glDrawElements(GL_TRIANGLES, NumV, GL_UNSIGNED_SHORT, 0);
 
+	TwDraw();
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(2);
 	glutSwapBuffers();
 }
 
 void reshape(int w, int h)
 {
 	glViewport(0, 0, w, h);
+	TwWindowSize(w, h);
 }
 
 void ExitFunction(int value)
@@ -484,33 +613,8 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 
-	//The old way of getting the GL version
-	//This will give you something like 3.3.2895 WinXP SSE
-	//where the 3.3 would be the version number and the rest is vendor
-	//dependent information.
-	//In this case, 2895 is a build number.
-	//Then the OS : WinXP
-	//Then CPU features such as SSE
-	cout << "OpenGL version = " << glGetString(GL_VERSION) << endl;
-
-	//This is the new way for getting the GL version.
-	//It returns integers. Much better than the old glGetString(GL_VERSION).
-	glGetIntegerv(GL_MAJOR_VERSION, &OpenGLVersion[0]);
-	glGetIntegerv(GL_MINOR_VERSION, &OpenGLVersion[1]);
-	cout << "OpenGL major version = " << OpenGLVersion[0] << endl;
-	cout << "OpenGL minor version = " << OpenGLVersion[1] << endl << endl;
-
-	//The old method to get the extension list is obsolete.
-	//You must use glGetIntegerv and glGetStringi
-	glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
-
-	//We don't need any extensions. Useless code.
-	for (i = 0; i<NumberOfExtensions; i++)
-	{
-		const GLubyte *ccc = glGetStringi(GL_EXTENSIONS, i);
-	}
-
 	InitGLStates();
+	InitializeUI();
 
 	if (LoadShader("Shader1.vert", "Shader1.frag", false, false, true, Shader, VertShader, FragShader) == -1)
 	{
@@ -526,5 +630,10 @@ int main(int argc, char* argv[])
 	glutReshapeFunc(reshape);
 
 	glutMainLoop();
+	TwTerminate();
 	return 0;
+}
+
+void TW_CALL Reset(void *clientDate){
+	dLight.position = { 0.0f, 0.0f, 0.0f, 1.0f };
 }
