@@ -32,22 +32,21 @@ struct material{
 	float	shine;
 };
 
-GLuint NumTris, material_count;
+GLuint NumTris, material_count, NumV;
 GLfloat x_min = FLT_MIN, x_max = FLT_MIN,
 y_min = FLT_MIN, y_max = FLT_MIN,
 z_min = FLT_MIN, z_max = FLT_MIN; //To calculate the model position
 triangle *Tris;
 material *Mate;
 
-GLuint NumV;
 GLushort	*pindex_triangle;
 std::vector<TVertex_VC>	pvertex_triangle;
-
 GLuint VAOID, IBOID, VBOID;
-
 GLuint Shader, VertShader, FragShader;
-
 int ProjectionModelviewMatrix_Loc;
+
+enum Model { CUBE, COW, PHONE };
+Model model = PHONE;
 
 // loadFile - loads text file into char* fname
 // allocates memory - so need to delete after use
@@ -161,6 +160,7 @@ bool readin(char *FileName) {
 		fscanf(fp, "%c", &ch);
 
 	Tris = new triangle[NumTris];
+	pvertex_triangle.clear();
 	for (int i = 0; i<NumTris; i++) // read triangles
 	{
 		fscanf(fp, "v0 %f %f %f %f %f %f %d\n",
@@ -315,8 +315,6 @@ int LoadShader(const char *pfilePath_vs, const char *pfilePath_fs, bool bindTexC
 	return 1;		//Success
 }
 
-
-
 void CreateGeometry(){
 
 	for (int i = 0; i < NumV; i++){
@@ -380,14 +378,34 @@ void CreateGeometry(){
 
 void display()
 {
+	glm::mat4 V;
 	
-	glm::mat4 projectionModelviewMatrix = glm::mat4(1.0f);
+	switch (model)
+	{
+	case CUBE:
+		readin("cube.in");
+		V = glm::lookAt(glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, -2.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+		break;
+	case COW:
+		readin("cow_up.in");
+		V = glm::lookAt(glm::vec3((x_min + x_max) / 2, (y_min + y_max) / 2, 1000 + (z_min + z_max) / 2),
+			glm::vec3((x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+		break;
+	case PHONE:
+		readin("phone.in");
+		V = glm::lookAt(glm::vec3((x_min + x_max) / 2 , (y_min + y_max) / 2, 1000 + (z_min + z_max) / 2),
+			glm::vec3((x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2),
+			glm::vec3(0.0f, 1.0f, 0.0f));
+		break;
+	}
 
-	glm::mat4 V = glm::lookAt(glm::vec3((x_min + x_max) / 2, (y_min + y_max) / 2, 1000 + (z_min + z_max) / 2),
-		glm::vec3((x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2),
-		glm::vec3(0.0f, 1.0f, 0.0f));;
+	CreateGeometry();
+
 	glm::mat4 P = glm::perspective(45.0f, 4.0f / 3.0f, 1.0f, 1000.0f);
-	projectionModelviewMatrix = P * V;
+	glm::mat4 projectionModelviewMatrix = P * V;
 
 	//Clear all the buffers
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -503,10 +521,8 @@ int main(int argc, char* argv[])
 		ProjectionModelviewMatrix_Loc = glGetUniformLocation(Shader, "ProjectionModelviewMatrix");
 	}
 
-	readin("phone.in");
-	CreateGeometry();
-
 	glutDisplayFunc(display);
+	glutIdleFunc(display);
 	glutReshapeFunc(reshape);
 
 	glutMainLoop();
