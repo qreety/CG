@@ -441,6 +441,9 @@ void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat
 	glUniformMatrix4fv(glGetUniformLocation(Shader, "MVP"), 1, FALSE, &MVPMatrix[0][0]);
 	glUniformMatrix4fv(glGetUniformLocation(Shader, "M"), 1, FALSE, &ModelMatrix[0][0]);
 
+	//Globle Ambient light
+	glUniform3f(glGetUniformLocation(programID, "aLight"), global_r, global_g, global_b);
+
 	//Materials
 	if (model == CUBE || model == COW){
 		glUniform3f(glGetUniformLocation(programID, "mat[0].ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
